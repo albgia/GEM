@@ -126,6 +126,30 @@ addAR10Y = function(series) {
         AR10Y.gem.dm = rollapplyr(Ret1M.gem.dm, 12*10, mean, fill=NA, partial=FALSE))
 }
 
+monthlyDecompCol = function() {
+    paste("M", as.character(seq(1:12)), sep="")
+}
+
+monthlyDecomp = function(series) {
+    W5000Ret = series[13, "Ret1M.w5000"]
+    AGGRet = series[13, "Ret1M.agg"]
+    v = head(ifelse((series[, "Prem1M"] > 0 & W5000Ret > AGGRet) | (series[, "Prem1M"] < 0 & W5000Ret < AGGRet), 1, 0), 12)
+    names(v) = monthlyDecompCol()
+    return(v)
+}
+
+monthlyProb = function(series) {
+    M12 = subset(series, select=monthlyDecompCol())
+    M12 = M12[complete.cases(M12),]
+    apply(M12, 2, sum) / nrow(M12)
+}
+
+addMonthlyDecomp = function(series) {
+    series = cbind(series, rollapplyr(subset(series, select=c(Prem1M, Ret1M.w5000, Ret1M.agg)), 13, monthlyDecomp, by.column=FALSE, fill=NA, partial=FALSE, coredata=TRUE))
+
+    return(series)
+}
+
 testCases = function(series) {
     by.year = aggregate(index(series), list(Year = as.integer(as.yearmon(index(series)))), length)
     if( nrow((incomplete = subset(by.year, x<12))) > 0 )
@@ -138,7 +162,7 @@ buildAll = function() {
     agg = loadAGG("BAMLCC0A0CMTRIV.csv")
     tb3m = loadTB3M("TB3MS.csv")
     
-    series = addAR10Y(addNext(addSharpe(addGEM(addPremium(merge(w5000, msci, agg, tb3m, all=TRUE))))))
+    series = addMonthlyDecomp(addAR10Y(addNext(addSharpe(addGEM(addPremium(merge(w5000, msci, agg, tb3m, all=TRUE)))))))
     return(series[!is.na(series$Prem12M),])
 }
 
