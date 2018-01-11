@@ -141,7 +141,7 @@ monthlyDecomp = function(series) {
 monthlyProb = function(series) {
     M12 = subset(series, select=monthlyDecompCol())
     M12 = M12[complete.cases(M12),]
-    apply(M12, 2, sum) / nrow(M12)
+    apply(M12, 2, function(x) binom.test(sum(x), length(x))$conf.int[1:2])
 }
 
 addMonthlyDecomp = function(series) {
