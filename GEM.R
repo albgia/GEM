@@ -126,26 +126,37 @@ addAR10Y = function(series) {
         AR10Y.gem.dm = rollapplyr(Ret1M.gem.dm, 12*10, mean, fill=NA, partial=FALSE))
 }
 
-monthlyDecompCol = function() {
-    paste("M", as.character(seq(1:12)), sep="")
+quarterDecompCol = function() {
+    paste("Q", as.character(seq(1:4)), sep="")
 }
 
-monthlyDecomp = function(series) {
-    W5000Ret = series[13, "Ret1M.w5000"]
-    AGGRet = series[13, "Ret1M.agg"]
-    v = head(ifelse((series[, "Prem1M"] > 0 & W5000Ret > AGGRet) | (series[, "Prem1M"] < 0 & W5000Ret < AGGRet), 1, 0), 12)
-    names(v) = monthlyDecompCol()
+quarterDecomp = function(series) {
+    targetW5000Ret = series[13, "Ret1M.w5000"]
+    targetAGGRet = series[13, "Ret1M.agg"]
+    PremQ1 = prod(1 + series[1:3, "Prem1M"]) - 1
+    PremQ2 = prod(1 + series[4:6, "Prem1M"]) - 1
+    PremQ3 = prod(1 + series[7:9, "Prem1M"]) - 1
+    PremQ4 = prod(1 + series[10:12, "Prem1M"]) - 1
+    
+    v = as.integer(c(
+        (PremQ1 > 0 & targetW5000Ret > targetAGGRet) | (PremQ1 < 0 & targetW5000Ret < targetAGGRet),
+        (PremQ2 > 0 & targetW5000Ret > targetAGGRet) | (PremQ2 < 0 & targetW5000Ret < targetAGGRet),
+        (PremQ3 > 0 & targetW5000Ret > targetAGGRet) | (PremQ3 < 0 & targetW5000Ret < targetAGGRet),
+        (PremQ4 > 0 & targetW5000Ret > targetAGGRet) | (PremQ4 < 0 & targetW5000Ret < targetAGGRet)))
+    
+    names(v) = quarterDecompCol()
+    
     return(v)
 }
 
-monthlyProb = function(series) {
-    M12 = subset(series, select=monthlyDecompCol())
-    M12 = M12[complete.cases(M12),]
-    apply(M12, 2, function(x) binom.test(sum(x), length(x))$conf.int[1:2])
+quarterProb = function(series) {
+    Q4 = subset(series, select=quarterDecompCol())
+    Q4 = Q4[complete.cases(Q4),]
+    apply(Q4, 2, function(x) binom.test(sum(x), length(x))$conf.int[1:2])
 }
 
-addMonthlyDecomp = function(series) {
-    series = cbind(series, rollapplyr(subset(series, select=c(Prem1M, Ret1M.w5000, Ret1M.agg)), 13, monthlyDecomp, by.column=FALSE, fill=NA, partial=FALSE, coredata=TRUE))
+addQuarterDecomp = function(series) {
+    series = cbind(series, rollapplyr(subset(series, select=c(Prem1M, Ret1M.w5000, Ret1M.agg)), 13, quarterDecomp, by.column=FALSE, fill=NA, partial=FALSE, coredata=TRUE))
 
     return(series)
 }
@@ -162,7 +173,7 @@ buildAll = function() {
     agg = loadAGG("BAMLCC0A0CMTRIV.csv")
     tb3m = loadTB3M("TB3MS.csv")
     
-    series = addMonthlyDecomp(addAR10Y(addNext(addSharpe(addGEM(addPremium(merge(w5000, msci, agg, tb3m, all=TRUE)))))))
+    series = addQuarterDecomp(addAR10Y(addNext(addSharpe(addGEM(addPremium(merge(w5000, msci, agg, tb3m, all=TRUE)))))))
     return(series[!is.na(series$Prem12M),])
 }
 
