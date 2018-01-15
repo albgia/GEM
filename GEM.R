@@ -156,7 +156,7 @@ quarterProb = function(series) {
 }
 
 addQuarterDecomp = function(series) {
-    series = cbind(series, rollapplyr(subset(series, select=c(Prem1M, Ret1M.w5000, Ret1M.agg)), 13, quarterDecomp, by.column=FALSE, fill=NA, partial=FALSE, coredata=TRUE))
+    series = cbind(series, rollapplyr(subset(series, select=c(Prem1M, Ret1M.w5000, Ret1M.agg)), 13, quarterDecomp, by=12, by.column=FALSE, fill=NA, partial=FALSE, coredata=TRUE))
 
     return(series)
 }
