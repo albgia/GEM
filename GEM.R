@@ -5,7 +5,7 @@ library(car)
 
 ## sharpe.down = window(x, start="Oct 1990", end="Oct 2000")
 ## Sharpe down performance due to switch to AGG from Oct 1990 (highest spread btw Sharpe ratios for the period) to Oct 2000 (lowest)
-## Only 16 months were GEM was in AGG, AGG mean and median returns not different than the rest of the data
+## Only 16 months with GEM was in AGG, AGG mean and median returns not different than the rest of the data
 ## Premium leading to AGG significantly lower
 
 ## start="Jan 1970", end="Sep 1990"
@@ -29,8 +29,8 @@ loadMSCI = function(filename) {
     msci[,2] = as.numeric(gsub("\\,", "", msci[,2]))
     msci = msci[!is.na(msci$Index),] # remove NA index obs
     msci = aggregate(msci, list(Month = as.yearmon(msci$Date)), tail, 1) # reduce to last entry of each month
-    msci = transform(msci, Ret1M = rollapplyr(Index, 2, ret, fill=NA, partial=FALSE))
-    msci = transform(msci, Ret12M = rollapplyr(1 + Ret1M, 12, prod, fill=NA, partial=FALSE) - 1) # calculate rolling 12M returns
+    msci = transform(msci, Ret1M = rollapplyr(Index, 2, ret, fill=NA))
+    msci = transform(msci, Ret12M = rollapplyr(1 + Ret1M, 12, prod, fill=NA) - 1) # calculate rolling 12M returns
 
     msci.num = subset(msci, select=-c(Month,Date)) # Remove non-numerical variables
     msci = zoo(msci.num, frequency=12, order.by=msci$Month)
@@ -43,8 +43,8 @@ loadW5000 = function(filename) {
     w5000[,2] = as.numeric(w5000[,2])
     w5000 = w5000[!is.na(w5000$Index),]
     w5000 = aggregate(w5000, list(Month = as.yearmon(w5000$Date)), tail, 1) # add Month only column
-    w5000 = transform(w5000, Ret1M = rollapplyr(Index, 2, ret, fill=NA, partial=FALSE)) # calculate 1M returns
-    w5000 = transform(w5000, Ret12M = rollapplyr(1 + w5000$Ret1M, 12, prod, fill=NA, partial=FALSE) - 1) # calculate 12M returns
+    w5000 = transform(w5000, Ret1M = rollapplyr(Index, 2, ret, fill=NA)) # calculate 1M returns
+    w5000 = transform(w5000, Ret12M = rollapplyr(1 + w5000$Ret1M, 12, prod, fill=NA) - 1) # calculate 12M returns
 
     w5000.num = subset(w5000, select=-c(Month,Date)) # Remove non-numerical date variables that will be replaced by zoo index
     w5000 = zoo(w5000.num, frequency=12, order.by=w5000$Month)
@@ -68,8 +68,8 @@ loadAGG = function(filename) {
     agg[,2] = as.numeric(agg[,2])
     agg = agg[!is.na(agg$Index),]
     agg = aggregate(agg, list(Month = as.yearmon(agg$Date)), tail, 1)
-    agg = transform(agg, Ret1M = rollapplyr(Index, 2, ret, fill=NA, partial=FALSE))
-    agg = transform(agg, Ret12M = rollapplyr(1 + agg$Ret1M, 12, prod, fill=NA, partial=FALSE) - 1)
+    agg = transform(agg, Ret1M = rollapplyr(Index, 2, ret, fill=NA))
+    agg = transform(agg, Ret12M = rollapplyr(1 + agg$Ret1M, 12, prod, fill=NA) - 1)
     
     agg.num = subset(agg, select=-c(Month, Date))
     agg = zoo(agg.num, frequency=12, order.by=agg$Month)
@@ -85,23 +85,46 @@ addPremium = function(series) {
     return(series[complete.cases(series),])
 }
 
-## GEM abs mom/dual mom instrument selection
-addGEM = function(series) {
-    ## 0 = AGG, 1 = W5000, 2 = MSCI
-    GEM.abs = with(series, ifelse(Prem12M < 0, 0, 1))
-    GEM.dm = with(series, ifelse(Prem12M < 0, 0, ifelse(Ret12M.w5000 > Ret12M.msci, 1, 2)))
-    ## Instrument selection must be lagged by 1 month based on previous 12M returns
-    series = merge(series, GEM.abs = lag(GEM.abs, k=-1))
-    series = merge(series, GEM.dm = lag(GEM.dm, k=-1))
-    ## Add selection return
+## GEM equities allocation
+allocGEM = function(series, thresh) {
+    Prem = series[1, "Prem12M"]
+    Alloc = c(.0, .0, .0)
+    names(Alloc) = c("w5000", "agg", "msci")
+
+    # Classic allocation
+    if( thresh == 0 ) {
+        if( Prem > 0 ) {
+            Alloc["w5000"] = 1
+        } else {
+            Alloc["agg"] = 1
+        }
+
+        return(Alloc)
+    }
+
+    # Threshold allocation
+    if( abs(Prem) < thresh ) {
+        Alloc["w5000"] = .5
+        Alloc["agg"] = .5
+    } else if( Prem > thresh )
+        Alloc["w5000"] = 1
+    else {
+        Alloc["agg"] = 1
+    }
+
+    return(Alloc)
+}
+
+## GEM abs mom/dual mom instruments allocation
+addGEM = function(series, thresh) {
+    series = transform(series, GEM = rollapplyr(subset(series, select=c(Prem1M, Prem12M)), 2, allocGEM, thresh, by.column=FALSE, fill=NA))
     series = transform(series,
-        Ret1M.gem.abs = ifelse(GEM.abs == 0, Ret1M.agg, Ret1M.w5000),
-        Ret1M.gem.dm = ifelse(GEM.dm == 0, Ret1M.agg, ifelse(GEM.dm == 1, Ret1M.w5000, Ret1M.msci)))
+        Ret1M.gem.abs = GEM.w5000 * Ret1M.w5000 + GEM.agg * Ret1M.agg,
+        Ret1M.gem.dm = GEM.w5000 * Ret1M.w5000 + GEM.agg * Ret1M.agg + GEM.msci * Ret1M.msci)
     
     return(series)
 }
 
-## next period returns
 addNext = function(series) {
     series = merge(series, NextRet1M.w5000 = lag(series$Ret1M.w5000), NextRet1M.agg = lag(series$Ret1M.agg), NextRet1M.msci = lag(series$Ret1M.msci))
     series = transform(series, NextW5000AGG = NextRet1M.w5000 > NextRet1M.agg)
@@ -111,9 +134,9 @@ addNext = function(series) {
 
 addSharpe = function(series) {
     series = transform(series,
-        Sharpe.w5000 = rollapplyr(subset(series, select=c(Ret1M.w5000, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA, partial=FALSE),
-        Sharpe.gem.abs = rollapplyr(subset(series, select=c(Ret1M.gem.abs, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA, partial=FALSE),
-        Sharpe.gem.dm = rollapplyr(subset(series, select=c(Ret1M.gem.dm, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA, partial=FALSE))
+        Sharpe.w5000 = rollapplyr(subset(series, select=c(Ret1M.w5000, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA),
+        Sharpe.gem.abs = rollapplyr(subset(series, select=c(Ret1M.gem.abs, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA),
+        Sharpe.gem.dm = rollapplyr(subset(series, select=c(Ret1M.gem.dm, Yield1M.tb3m)), 12*10, sharpeMonthly, by.column=FALSE, fill=NA))
 
     return(series)
 }
@@ -121,9 +144,9 @@ addSharpe = function(series) {
 ## Rolling 10Y average returns
 addAR10Y = function(series) {
     series = transform(series,
-        AR10Y.w5000 = rollapplyr(Ret1M.w5000, 12*10, mean, fill=NA, partial=FALSE),
-        AR10Y.gem.abs = rollapplyr(Ret1M.gem.abs, 12*10, mean, fill=NA, partial=FALSE),
-        AR10Y.gem.dm = rollapplyr(Ret1M.gem.dm, 12*10, mean, fill=NA, partial=FALSE))
+        AR10Y.w5000 = rollapplyr(Ret1M.w5000, 12*10, mean, fill=NA),
+        AR10Y.gem.abs = rollapplyr(Ret1M.gem.abs, 12*10, mean, fill=NA),
+        AR10Y.gem.dm = rollapplyr(Ret1M.gem.dm, 12*10, mean, fill=NA))
 }
 
 testCases = function(series) {
@@ -137,8 +160,13 @@ buildAll = function() {
     msci = loadMSCI("MSCI_WORLD_ex_US.csv")
     agg = loadAGG("BAMLCC0A0CMTRIV.csv")
     tb3m = loadTB3M("TB3MS.csv")
-    
-    series = addAR10Y(addNext(addSharpe(addGEM(addPremium(merge(w5000, msci, agg, tb3m, all=TRUE))))))
+
+    series = addPremium(merge(w5000, msci, agg, tb3m, all=TRUE))
+    series = addGEM(series, 0.025)
+    series = addNext(series)
+    series = addSharpe(series)
+    series = addAR10Y(series)
+
     return(series[!is.na(series$Prem12M),])
 }
 
@@ -170,12 +198,11 @@ plotPrem12MNextW5000AGG = function(series) {
 #    series = cbind(data.frame(coredata(series)),
 #        Period = as.factor(ifelse(index(series) > "Oct 1990" & index(series) < "Oct 2000", "1990-2000", "Remaining")))
 
-    scatterplot(NextW5000AGG ~ Prem12M | Period, data=coredata(series), subset=(abs(Prem12M) < 0.3),
+    scatterplot(NextW5000AGG ~ Prem12M, data=coredata(series), subset=(abs(Prem12M) < 0.3),
                 smoother=loessLine, smoother.args=list(familiy="binomial"), span=0.5,
                 reg.line=FALSE, boxplot="x",
                 main="Next Month Return Probability WS5000 > AGG", cex.main=0.8,
-                axes=FALSE, reset.par=FALSE, yaxp=c(0.1, 10, 10), grid=FALSE,
-                legend.plot=TRUE, legend.coords="bottomleft", cex.lab=0.75)
+                axes=FALSE, reset.par=FALSE, yaxp=c(0.1, 10, 10), grid=FALSE)
     ## Grid
     xticks = sort(c(-1*seq(0.1, 0.4, 0.1), seq(0.1, 0.4, 0.1), seq(-0.06, 0.06, 0.02)))
     yticks = seq(0.1, 1.0, 0.1) 
