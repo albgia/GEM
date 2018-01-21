@@ -5,15 +5,12 @@ library(car)
 
 ## sharpe.down = window(x, start="Oct 1990", end="Oct 2000")
 ## Sharpe down performance due to switch to AGG from Oct 1990 (highest spread btw Sharpe ratios for the period) to Oct 2000 (lowest)
-## Only 16 months with GEM was in AGG, AGG mean and median returns not different than the rest of the data
-## Premium leading to AGG significantly lower
+## Only 16 months in AGG during the period, AGG mean and median returns not different than the rest of the data
 
 ## start="Jan 1970", end="Sep 1990"
 ## start="Oct 1990", end="Oct 2000"
 ## start="Nov 2000", end="Dec 2017"
 
-xnext = function(v, k=1) { if( k > length(v) ) k = length(v); c(tail(v, -k), rep(NA, k)) }
-xprev = function(v, k=1) { if( k > length(v) ) k = length(v); c(rep(NA, k), head(v, -k)) }
 ret = function(t) { (t[2] - t[1]) / t[1] }
 ema = function(t, p) { a = 2 / (p + 1); (t[2] * a) + t[1] * (1 - a) }
 
@@ -210,4 +207,25 @@ plotPrem12MNextW5000AGG = function(series) {
     axis(2, yticks, cex.axis=0.8)
     abline(h=yticks, v=xticks, col="gray", lty=3)
     abline(v=0.0, col="green", lty=2)
+}
+
+## performance metrics from monthly returns
+## series include instrument monthly returns and risk-free monthly rate
+perf = function(series) {
+    tr = prod(1 + series[,1]) - 1 # total return
+    mr = mean(series[,1]) # average returns
+    years.time = nrow(series) / 12 # time in years
+    ar = tr ^ (1 / years.time) - 1 # annualized return
+    asd = sd(series[,1]) * sqrt(12) # annualized volatility
+    sr = sharpeMonthly(series)
+    um = sum(series[,1] > 0) / nrow(series)
+
+    eqt = cumprod(1 + series[,1])
+    peaks = cummax(eqt)
+    mdd = min(eqt / peaks - 1)
+
+    p = c(ar, asd, sr, mdd, um)
+    names(p) = c("AR", "ASD", "SR", "MDD", "UM")
+    
+    return(p)
 }
