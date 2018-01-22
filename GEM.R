@@ -11,6 +11,9 @@ library(car)
 ## start="Oct 1990", end="Oct 2000"
 ## start="Nov 2000", end="Dec 2017"
 
+## plotting export parameters
+## png(filename="10YRolling.png", width=800, height=800, type="cairo", pointsize=18)
+
 ret = function(t) { (t[2] - t[1]) / t[1] }
 ema = function(t, p) { a = 2 / (p + 1); (t[2] * a) + t[1] * (1 - a) }
 
@@ -175,9 +178,9 @@ plot10YRolling = function(series) {
     last.year = as.integer(tail(index(sharpe10),1))
     plot(cbind(sharpe10, base=rep(0, nrow(sharpe10))), # cbind Sharpe difference 0 horizontal line
          screens=c(1,1,3,3,2,2), col=c("gray","red","red","gray","black","gray"),
-         main="Rolling 10 Years GEM vs. Wilshire 5000", ylab=c("Sharpe", "Excess Sharpe", "Avg. Return"), cex.lab=0.75,
+         main="Rolling 10 Years Absolute Momentum vs. Wilshire 5000", ylab=c("Sharpe", "Excess Sharpe", "Avg. Return"), cex.lab=0.75,
          xaxt = "n", panel=plotMulti)
-    legend("bottomleft", c("GEM", "Wilshire 5000"), col=c("red", "gray"), lty=1, cex=0.75)
+    legend("bottomleft", c("AM", "Wilshire 5000"), col=c("red", "gray"), lty=1, cex=0.75)
 }
 
 plotMulti = function(x, y, ..., pf = parent.frame()) {
