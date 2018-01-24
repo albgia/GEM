@@ -117,7 +117,13 @@ allocGEM = function(series, thresh) {
 
 ## GEM abs mom/dual mom instruments allocation
 addGEM = function(series, thresh) {
+    ## Remove previous allocation weights to avoid generating extra columns in rollapply
+    series$GEM.w5000 = NULL
+    series$GEM.agg = NULL
+    series$GEM.msci = NULL
+    ## Allocate
     series = transform(series, GEM = rollapplyr(subset(series, select=c(Prem1M, Prem12M)), 2, allocGEM, thresh, by.column=FALSE, fill=NA))
+    ## Calculate portfolio returns
     series = transform(series,
         Ret1M.gem.abs = GEM.w5000 * Ret1M.w5000 + GEM.agg * Ret1M.agg,
         Ret1M.gem.dm = GEM.w5000 * Ret1M.w5000 + GEM.agg * Ret1M.agg + GEM.msci * Ret1M.msci)
