@@ -1,5 +1,8 @@
+Dual Momentum
+=============
+
 Data sources
-============
+------------
 https://www.msci.com/end-of-day-data-search (MSCI World ex-USA, Gross)
 
 https://fred.stlouisfed.org/series/TB3MS
@@ -9,7 +12,7 @@ https://fred.stlouisfed.org/series/WILL5000IND
 https://fred.stlouisfed.org/series/BAMLCC0A0CMTRIV
 
 Usage
-=====
+-----
 Download GEM.R and the data sets in the same directory you're running R.
 
 R> source('GEM.R')
